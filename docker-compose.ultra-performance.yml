@@ -1,0 +1,319 @@
+version: '3.8'
+
+services:
+  # 🚀 Ultra-High Performance API Gateway
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: ultra_performance_gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx-ultra.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - auth-service
+      - core-service
+      - file-service
+      - frontend
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.2'
+        reservations:
+          memory: 32M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # 🔐 Ultra-Fast Auth Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile.ultra
+    container_name: ultra_performance_auth
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://user:password@postgres:5432/githubclone?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=ultra-secure-jwt-secret-256-bit-production
+      - LOG_LEVEL=error
+      - NODE_OPTIONS=--max-old-space-size=128 --optimize-for-size
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.3'
+        reservations:
+          memory: 64M
+          cpus: '0.15'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ⚡ Ultra-Performance Core Service (GraphQL)
+  core-service:
+    build:
+      context: ./services/core-service
+      dockerfile: Dockerfile.ultra
+    container_name: ultra_performance_core
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DATABASE_URL=postgresql://user:password@postgres:5432/githubclone?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - LOG_LEVEL=error
+      - NODE_OPTIONS=--max-old-space-size=256 --optimize-for-size
+      - GRAPHQL_PLAYGROUND=false
+      - GRAPHQL_INTROSPECTION=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.6'
+        reservations:
+          memory: 128M
+          cpus: '0.3'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # 📁 Ultra-Efficient File Service
+  file-service:
+    build:
+      context: ./services/file-service
+      dockerfile: Dockerfile.ultra
+    container_name: ultra_performance_file
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - JWT_SECRET=ultra-secure-jwt-secret-256-bit-production
+      - LOG_LEVEL=error
+      - NODE_OPTIONS=--max-old-space-size=128 --optimize-for-size
+      - MAX_FILE_SIZE=10485760
+      - UPLOAD_PATH=/app/uploads
+    volumes:
+      - file_storage:/app/uploads:rw
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.3'
+        reservations:
+          memory: 64M
+          cpus: '0.15'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # 🎨 Ultra-Optimized Frontend (Static + CDN Ready)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.ultra
+    container_name: ultra_performance_frontend
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost/graphql
+      - NEXT_TELEMETRY_DISABLED=1
+      - NODE_OPTIONS=--max-old-space-size=128 --optimize-for-size
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.2'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # 🗄️ Ultra-Tuned PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: ultra_performance_postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: githubclone
+      # Ultra-performance tuning
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d githubclone"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    command: >
+      postgres
+      -c shared_buffers=64MB
+      -c effective_cache_size=192MB
+      -c maintenance_work_mem=16MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=2MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=2MB
+      -c min_wal_size=512MB
+      -c max_wal_size=2GB
+      -c max_worker_processes=2
+      -c max_parallel_workers_per_gather=1
+      -c max_parallel_workers=2
+      -c max_parallel_maintenance_workers=1
+
+  # ⚡ Ultra-Memory Redis
+  redis:
+    image: redis:7-alpine
+    container_name: ultra_performance_redis
+    command: >
+      redis-server
+      --maxmemory 64mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --tcp-keepalive 60
+      --timeout 300
+      --tcp-backlog 511
+      --databases 16
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis_data:/data
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.15'
+        reservations:
+          memory: 32M
+          cpus: '0.075'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # 📊 Ultra-Light Monitoring (Essential Only)
+  prometheus:
+    image: prom/prometheus:v2.45.0-alpine
+    container_name: ultra_performance_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.ultra.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=6h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--storage.tsdb.min-block-duration=1h'
+      - '--storage.tsdb.max-block-duration=1h'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - ultra-performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+          cpus: '0.2'
+        reservations:
+          memory: 48M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  ultra-performance-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ultra-performance-bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  file_storage:
+    driver: local
+  prometheus_data:
+    driver: local

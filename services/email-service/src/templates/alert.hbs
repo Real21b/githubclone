@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Security Alert</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #d73a49; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #fff5f5; padding: 30px; border-radius: 0 0 8px 8px; border-left: 4px solid #d73a49; }
+        .button { background: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+        .alert { background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 6px; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 Security Alert</h1>
+    </div>
+    <div class="content">
+        <div class="alert">
+            <h2>Security Notice</h2>
+            <p>{{message}}</p>
+        </div>
+        <p>If you didn't perform this action, please secure your account immediately.</p>
+        <a href="{{securityUrl}}" class="button">Secure Account</a>
+        <p><strong>What you should do:</strong></p>
+        <ul>
+            <li>Change your password immediately</li>
+            <li>Enable two-factor authentication</li>
+            <li>Review your recent activity</li>
+            <li>Contact support if you need help</li>
+        </ul>
+    </div>
+    <div class="footer">
+        <p>This security alert was sent from GitHub Clone</p>
+        <p>If you didn't perform this action, please take immediate action.</p>
+    </div>
+</body>
+</html>

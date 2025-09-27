@@ -1,0 +1,207 @@
+version: '3.8'
+
+services:
+  # 🗄️ PostgreSQL (Ultra-minimal)
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_ultra_light
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: githubclone
+      # Ultra-optimized PostgreSQL settings
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    command: >
+      postgres
+      -c shared_buffers=32MB
+      -c effective_cache_size=128MB
+      -c work_mem=2MB
+      -c maintenance_work_mem=32MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=4MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_connections=50
+      -c shared_preload_libraries=''
+    volumes:
+      - postgres_data_ultra:/var/lib/postgresql/data
+    networks:
+      - ultra-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.2'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  # 🔴 Redis (Ultra-minimal)
+  redis:
+    image: redis:7-alpine
+    container_name: redis_ultra_light
+    command: >
+      redis-server
+      --maxmemory 32mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --tcp-keepalive 60
+      --timeout 300
+      --maxclients 50
+    volumes:
+      - redis_data_ultra:/data
+    networks:
+      - ultra-network
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: '0.1'
+        reservations:
+          memory: 16M
+          cpus: '0.05'
+
+  # 🔐 Auth Service (Ultra-minimal)
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service_ultra
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://user:password@db:5432/githubclone
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your-super-secret-jwt-key
+      - LOG_LEVEL=error
+      - NODE_OPTIONS=--max-old-space-size=64
+      - UV_THREADPOOL_SIZE=2
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ultra-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.15'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+
+  # ⚡ Core Service (Ultra-minimal)
+  core-service:
+    build:
+      context: ./services/core-service
+      dockerfile: Dockerfile
+    container_name: core_service_ultra
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DATABASE_URL=postgresql://user:password@db:5432/githubclone
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=error
+      - NODE_OPTIONS=--max-old-space-size=128
+      - UV_THREADPOOL_SIZE=2
+    depends_on:
+      - db
+      - redis
+    networks:
+      - ultra-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.2'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  # 📁 File Service (Ultra-minimal)
+  file-service:
+    build:
+      context: ./services/file-service
+      dockerfile: Dockerfile
+    container_name: file_service_ultra
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=error
+      - NODE_OPTIONS=--max-old-space-size=64
+      - UV_THREADPOOL_SIZE=2
+    depends_on:
+      - redis
+    networks:
+      - ultra-network
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.15'
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+
+  # 🌐 Frontend (Ultra-minimal)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend_ultra
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:3002/graphql
+      - NODE_OPTIONS=--max-old-space-size=128
+      - UV_THREADPOOL_SIZE=2
+    networks:
+      - ultra-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.2'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  # 🌐 Nginx Gateway (Ultra-minimal)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_ultra_light
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx-ultra-light.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - auth-service
+      - core-service
+      - file-service
+    networks:
+      - ultra-network
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+          cpus: '0.1'
+        reservations:
+          memory: 16M
+          cpus: '0.05'
+
+networks:
+  ultra-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ultra-bridge
+
+volumes:
+  postgres_data_ultra:
+  redis_data_ultra:

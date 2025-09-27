@@ -1,0 +1,552 @@
+version: '3.8'
+
+services:
+  # 🗄️ PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_unified
+    environment:
+      POSTGRES_USER: ${DB_USER:-githubclone_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-githubclone_password}
+      POSTGRES_DB: ${DB_NAME:-githubclone}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-githubclone_user} -d ${DB_NAME:-githubclone}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🔴 Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: redis_unified
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # 🚀 Zookeeper (Kafka için)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper_unified
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      KAFKA_HEAP_OPTS: "-Xmx128m -Xms64m"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ⚡ Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka_unified
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🔐 Auth Service
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${AUTH_SERVICE_PORT:-3001}
+      - DATABASE_URL=postgresql://${DB_USER:-githubclone_user}:${DB_PASSWORD:-githubclone_password}@postgres:5432/${DB_NAME:-githubclone}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secure-jwt-secret-key}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ⚡ Core Service (GraphQL)
+  core-service:
+    build:
+      context: ./services/core-service
+      dockerfile: Dockerfile
+    container_name: core_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${CORE_SERVICE_PORT:-3002}
+      - DATABASE_URL=postgresql://${DB_USER:-githubclone_user}:${DB_PASSWORD:-githubclone_password}@postgres:5432/${DB_NAME:-githubclone}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 📁 File Service
+  file-service:
+    build:
+      context: ./services/file-service
+      dockerfile: Dockerfile
+    container_name: file_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${FILE_SERVICE_PORT:-3003}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    ports:
+      - "3003:3003"
+    volumes:
+      - file_uploads:/app/uploads
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 📧 Email Service
+  email-service:
+    build:
+      context: ./services/email-service
+      dockerfile: Dockerfile
+    container_name: email_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${EMAIL_SERVICE_PORT:-3004}
+      - KAFKA_BROKER_URL=kafka:29092
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-your-email@gmail.com}
+      - SMTP_PASS=${SMTP_PASS:-your-app-password}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "3004:3004"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 📱 SMS Service
+  sms-service:
+    build:
+      context: ./services/sms-service
+      dockerfile: Dockerfile
+    container_name: sms_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${SMS_SERVICE_PORT:-3005}
+      - KAFKA_BROKER_URL=kafka:29092
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-your-twilio-account-sid}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-your-twilio-auth-token}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-+1234567890}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "3005:3005"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🔔 Notification Service
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${NOTIFICATION_SERVICE_PORT:-3006}
+      - KAFKA_BROKER_URL=kafka:29092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3006:3006"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🌐 WordPress Service
+  wordpress-service:
+    build:
+      context: ./services/wordpress-service
+      dockerfile: Dockerfile
+    container_name: wordpress_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${WORDPRESS_SERVICE_PORT:-3007}
+      - WORDPRESS_URL=${WORDPRESS_URL:-https://your-wordpress-site.com}
+      - WORDPRESS_USERNAME=${WORDPRESS_USERNAME:-your-username}
+      - WORDPRESS_PASSWORD=${WORDPRESS_PASSWORD:-your-password}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    ports:
+      - "3007:3007"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 💬 WhatsApp Service
+  whatsapp-service:
+    build:
+      context: ./services/whatsapp-service
+      dockerfile: Dockerfile
+    container_name: whatsapp_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${WHATSAPP_SERVICE_PORT:-3008}
+      - WHATSAPP_SESSION_PATH=${WHATSAPP_SESSION_PATH:-/app/sessions}
+      - WHATSAPP_QR_CODE_PATH=${WHATSAPP_QR_CODE_PATH:-/app/qr-codes}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    ports:
+      - "3008:3008"
+    volumes:
+      - whatsapp_sessions:/app/sessions
+      - whatsapp_qr_codes:/app/qr-codes
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 📱 Telegram Service
+  telegram-service:
+    build:
+      context: ./services/telegram-service
+      dockerfile: Dockerfile
+    container_name: telegram_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${TELEGRAM_SERVICE_PORT:-3009}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-your-telegram-bot-token}
+      - TELEGRAM_WEBHOOK_URL=${TELEGRAM_WEBHOOK_URL:-https://your-domain.com/webhook/telegram}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    ports:
+      - "3009:3009"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🤖 AI Service
+  ai-service:
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    container_name: ai_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${AI_SERVICE_PORT:-3010}
+      - KAFKA_BROKER_URL=kafka:29092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-your-anthropic-api-key}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-your-google-ai-api-key}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3010:3010"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🔌 Real-time Service
+  realtime-service:
+    build:
+      context: ./services/realtime-service
+      dockerfile: Dockerfile
+    container_name: realtime_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${REALTIME_SERVICE_PORT:-3011}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-your-super-secure-jwt-secret-key}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "3011:3011"
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🔧 Integration Service
+  integration-service:
+    build:
+      context: ./services/integration-service
+      dockerfile: Dockerfile
+    container_name: integration_service_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${INTEGRATION_SERVICE_PORT:-3012}
+      - KAFKA_BROKER_URL=kafka:29092
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3012:3012"
+    volumes:
+      - integration_logs:/app/logs
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3012/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🌐 Frontend (Development - Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.vite
+    container_name: frontend_unified
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - VITE_GRAPHQL_URL=http://localhost:3002/graphql
+      - VITE_API_URL=http://localhost:3002
+      - VITE_AUTH_URL=http://localhost:3001
+      - VITE_REALTIME_URL=http://localhost:3011
+      - VITE_INTEGRATION_URL=http://localhost:3012
+    ports:
+      - "3000:3001"
+    networks:
+      - unified-network
+    depends_on:
+      - core-service
+      - auth-service
+      - realtime-service
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🌐 Nginx Gateway
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_unified
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.unified.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - auth-service
+      - core-service
+      - realtime-service
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # 📊 Prometheus (Monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus_unified
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.unified.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - unified-network
+
+  # 📈 Grafana (Monitoring)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana_unified
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - unified-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  unified-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: unified-bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
+  file_uploads:
+    driver: local
+  whatsapp_sessions:
+    driver: local
+  whatsapp_qr_codes:
+    driver: local
+  integration_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

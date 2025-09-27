@@ -1,0 +1,63 @@
+# 🚀 Ultra-Lightweight Prometheus Configuration
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  scrape_timeout: 10s
+
+# 📊 Scrape configurations
+scrape_configs:
+  # 🏥 Health checks
+  - job_name: 'health-checks'
+    static_configs:
+      - targets: 
+        - 'nginx:80'
+        - 'auth-service:3001'
+        - 'core-service:3002'
+        - 'file-service:3003'
+        - 'frontend:3000'
+    metrics_path: '/health'
+    scrape_interval: 30s
+    scrape_timeout: 5s
+
+  # 🔐 Auth Service metrics
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # ⚡ Core Service metrics
+  - job_name: 'core-service'
+    static_configs:
+      - targets: ['core-service:3002']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # 📁 File Service metrics
+  - job_name: 'file-service'
+    static_configs:
+      - targets: ['file-service:3003']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # 🗄️ PostgreSQL metrics (if available)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 60s
+
+  # ⚡ Redis metrics (if available)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 60s
+
+# 🚨 Alerting rules (minimal set)
+rule_files:
+  - "ultra-alerts.yml"
+
+# 📧 Alertmanager configuration (if needed)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []

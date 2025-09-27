@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Welcome to GitHub Clone</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #24292e; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { background: #f6f8fa; padding: 30px; border-radius: 0 0 8px 8px; }
+        .button { background: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 Welcome to GitHub Clone!</h1>
+    </div>
+    <div class="content">
+        <h2>Hello {{username}}!</h2>
+        <p>Thank you for joining GitHub Clone. Your account has been created successfully.</p>
+        <p>You can now:</p>
+        <ul>
+            <li>Create and manage repositories</li>
+            <li>Collaborate with other developers</li>
+            <li>Track issues and pull requests</li>
+            <li>Share your code with the world</li>
+        </ul>
+        <a href="{{loginUrl}}" class="button">Get Started</a>
+        <p>If you have any questions, feel free to reach out to our support team.</p>
+    </div>
+    <div class="footer">
+        <p>This email was sent from GitHub Clone</p>
+        <p>If you didn't create this account, please ignore this email.</p>
+    </div>
+</body>
+</html>

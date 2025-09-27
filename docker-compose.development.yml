@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  # 🗄️ PostgreSQL (Development)
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_development
+    environment:
+      POSTGRES_USER: githubclone_user
+      POSTGRES_PASSWORD: githubclone_password
+      POSTGRES_DB: githubclone_development
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - development-network
+
+  # 🔴 Redis (Development)
+  redis:
+    image: redis:7-alpine
+    container_name: redis_development
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    networks:
+      - development-network
+
+  # 🔐 Auth Service (Development)
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service_development
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://githubclone_user:githubclone_password@db:5432/githubclone_development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=development-jwt-secret-key
+      - LOG_LEVEL=debug
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "3001:3001"
+    networks:
+      - development-network
+    volumes:
+      - ./services/auth-service:/usr/src/app
+      - /usr/src/app/node_modules
+
+  # ⚡ Core Service (Development)
+  core-service:
+    build:
+      context: ./services/core-service
+      dockerfile: Dockerfile
+    container_name: core_service_development
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DATABASE_URL=postgresql://githubclone_user:githubclone_password@db:5432/githubclone_development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=debug
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "3002:3002"
+    networks:
+      - development-network
+    volumes:
+      - ./services/core-service:/usr/src/app
+      - /usr/src/app/node_modules
+
+  # 🔌 Real-time Service (Development)
+  realtime-service:
+    build:
+      context: ./services/realtime-service
+      dockerfile: Dockerfile
+    container_name: realtime_service_development
+    environment:
+      - NODE_ENV=development
+      - PORT=3011
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=development-jwt-secret-key
+      - LOG_LEVEL=debug
+    depends_on:
+      - redis
+    ports:
+      - "3011:3011"
+    networks:
+      - development-network
+    volumes:
+      - ./services/realtime-service:/usr/src/app
+      - /usr/src/app/node_modules
+
+  # 🌐 Frontend (Development - Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.vite
+    container_name: frontend_development
+    environment:
+      - NODE_ENV=development
+      - VITE_GRAPHQL_URL=http://localhost:3002/graphql
+      - VITE_API_URL=http://localhost:3002
+      - VITE_REALTIME_URL=http://localhost:3011
+      - VITE_INTEGRATION_URL=http://localhost:3012
+    ports:
+      - "3000:3001"
+    networks:
+      - development-network
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - core-service
+      - auth-service
+      - realtime-service
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # 🌐 Nginx Gateway (Development)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_development
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.development.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - auth-service
+      - core-service
+      - realtime-service
+    networks:
+      - development-network
+
+networks:
+  development-network:
+    driver: bridge
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:

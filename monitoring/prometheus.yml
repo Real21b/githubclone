@@ -1,0 +1,29 @@
+# 🚀 GitHub Clone - Prometheus Configuration
+# ⚠️  DEPRECATED: Use prometheus.unified.yml for full microservices monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Legacy Backend metrics (DEPRECATED)
+  - job_name: 'githubclone-backend-legacy'
+    static_configs:
+      - targets: ['backend:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node exporter (optional - for system metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 5s

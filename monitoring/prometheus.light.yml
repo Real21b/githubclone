@@ -1,0 +1,32 @@
+global:
+  scrape_interval: 30s  # Reduced frequency
+  evaluation_interval: 30s
+
+scrape_configs:
+  # Auth Service
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Core Service
+  - job_name: 'core-service'
+    static_configs:
+      - targets: ['core-service:3002']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # File Service
+  - job_name: 'file-service'
+    static_configs:
+      - targets: ['file-service:3003']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Nginx
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 30s

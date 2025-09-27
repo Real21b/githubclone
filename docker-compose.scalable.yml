@@ -1,0 +1,211 @@
+version: '3.8'
+
+services:
+  # 🗄️ PostgreSQL (Scalable)
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_scalable
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: githubclone
+      # Scalable PostgreSQL settings
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c effective_cache_size=512MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_connections=200
+      -c shared_preload_libraries=''
+    volumes:
+      - postgres_data_scalable:/var/lib/postgresql/data
+    networks:
+      - scalable-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # 🔴 Redis (Scalable)
+  redis:
+    image: redis:7-alpine
+    container_name: redis_scalable
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --tcp-keepalive 60
+      --timeout 300
+      --maxclients 200
+    volumes:
+      - redis_data_scalable:/data
+    networks:
+      - scalable-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
+        reservations:
+          memory: 128M
+          cpus: '0.15'
+
+  # 🔐 Auth Service (Scalable)
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth_service_scalable
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://user:password@db:5432/githubclone
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=your-super-secret-jwt-key
+      - LOG_LEVEL=info
+      - NODE_OPTIONS=--max-old-space-size=256
+      - UV_THREADPOOL_SIZE=4
+    depends_on:
+      - db
+      - redis
+    networks:
+      - scalable-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
+        reservations:
+          memory: 128M
+          cpus: '0.15'
+
+  # ⚡ Core Service (Scalable)
+  core-service:
+    build:
+      context: ./services/core-service
+      dockerfile: Dockerfile
+    container_name: core_service_scalable
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DATABASE_URL=postgresql://user:password@db:5432/githubclone
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+      - NODE_OPTIONS=--max-old-space-size=512
+      - UV_THREADPOOL_SIZE=4
+    depends_on:
+      - db
+      - redis
+    networks:
+      - scalable-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # 📁 File Service (Scalable)
+  file-service:
+    build:
+      context: ./services/file-service
+      dockerfile: Dockerfile
+    container_name: file_service_scalable
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+      - NODE_OPTIONS=--max-old-space-size=256
+      - UV_THREADPOOL_SIZE=4
+    depends_on:
+      - redis
+    networks:
+      - scalable-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
+        reservations:
+          memory: 128M
+          cpus: '0.15'
+
+  # 🌐 Frontend (Scalable)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend_scalable
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:3002/graphql
+      - NODE_OPTIONS=--max-old-space-size=512
+      - UV_THREADPOOL_SIZE=4
+    networks:
+      - scalable-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  # 🌐 Nginx Gateway (Scalable)
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_scalable
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx-scalable.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - auth-service
+      - core-service
+      - file-service
+    networks:
+      - scalable-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.2'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+networks:
+  scalable-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: scalable-bridge
+
+volumes:
+  postgres_data_scalable:
+  redis_data_scalable:

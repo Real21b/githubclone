@@ -1,0 +1,49 @@
+# 🚀 GitHub Clone - Grafana Datasource Configuration
+# Unified microservices monitoring setup
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      prometheusType: Prometheus
+      prometheusVersion: 2.40.0
+      cacheLevel: 'High'
+      disableRecordingRules: false
+      incrementalQueryOverlapWindow: 10m
+    secureJsonData:
+      httpHeaderValue1: 'Bearer your-token-here'
+
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: githubclone
+    user: githubclone_user
+    secureJsonData:
+      password: githubclone_password
+    jsonData:
+      sslmode: 'disable'
+      maxOpenConns: 0
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: false
+
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis:6379
+    jsonData:
+      client: standalone
+      poolSize: 5
+      timeout: 5
+      pingInterval: 0
+      pipelineWindow: 0
