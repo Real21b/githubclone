@@ -1,6 +1,6 @@
 # 🚀 GitHub Clone - Modern Microservices Platform
 
-[![CI/CD](https://github.com/yourusername/githubclone/actions/workflows/main.yml/badge.svg)](https://github.com/yourusername/githubclone/actions/workflows/main.yml)
+[![CI/CD](https://github.com/Real21b/githubclone/actions/workflows/ci.yml/badge.svg)](https://github.com/Real21b/githubclone/actions/workflows/ci.yml)
 [![Code Quality](https://sonarcloud.io/api/project_badges/measure?project=githubclone&metric=alert_status)](https://sonarcloud.io/dashboard?id=githubclone)
 [![Performance](https://img.shields.io/badge/performance-optimized-green.svg)](https://github.com/yourusername/githubclone)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -59,7 +59,7 @@ GitHub Clone, modern mikro servis mimarisi kullanarak geliştirilmiş, yüksek p
 
 #### **1. Projeyi Klonlayın**
 ```bash
-git clone https://github.com/yourusername/githubclone.git
+git clone https://github.com/Real21b/githubclone.git
 cd githubclone
 ```
 
@@ -251,14 +251,14 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICE
 
 ## 👥 **Takım**
 
-- **Lead Developer** - [Your Name](https://github.com/yourusername)
-- **DevOps Engineer** - [Team Member](https://github.com/teammember)
-- **Frontend Developer** - [Team Member](https://github.com/teammember)
+- **Lead Developer** - [Real21b](https://github.com/Real21b)
+- **DevOps Engineer** - [Real21b](https://github.com/Real21b)
+- **Frontend Developer** - [Real21b](https://github.com/Real21b)
 
 ## 📞 **İletişim**
 
 - **Email**: your.email@example.com
-- **GitHub**: [@yourusername](https://github.com/yourusername)
+- **GitHub**: [@Real21b](https://github.com/Real21b)
 - **LinkedIn**: [Your Profile](https://linkedin.com/in/yourprofile)
 
 ## 🙏 **Teşekkürler**
