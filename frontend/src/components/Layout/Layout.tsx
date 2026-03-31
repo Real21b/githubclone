@@ -226,7 +226,7 @@ const Layout: React.FC = () => {
           >
             <SearchIcon sx={{ color: '#8b949e', fontSize: 18, mr: 0.5 }} />
             <InputBase
-              placeholder="Type / to search"
+              placeholder="Search or jump to…"
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               onKeyDown={handleSearchKeyDown}
@@ -251,7 +251,7 @@ const Layout: React.FC = () => {
                   whiteSpace: 'nowrap',
                 }}
               >
-                Ctrl+K
+                {navigator.platform?.toUpperCase().includes('MAC') ? '⌘K' : 'Ctrl+K'}
               </Box>
             )}
           </Box>
