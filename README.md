@@ -7,7 +7,17 @@
 
 ## 📋 **Proje Hakkında**
 
-GitHub Clone, modern mikro servis mimarisi kullanarak geliştirilmiş, yüksek performanslı ve ölçeklenebilir bir geliştirme platformudur. 12 mikro servis, gerçek zamanlı iletişim, AI entegrasyonu ve kapsamlı monitoring sistemi ile donatılmıştır.
+GitHub Clone, modern mikro servis mimarisi kullanarak geliştirilmiş, ölçeklenebilir bir geliştirme platformu olmayı hedefler.
+
+> ### ⚠️ **Önce bunu okuyun: [GELISTIRME-REHBERI.md](GELISTIRME-REHBERI.md)**
+>
+> Proje şu anda **iskelet aşamasındadır** ve aşağıdaki bölümlerin bir kısmı hedef durumu
+> tarif eder, mevcut durumu değil. Kod tabanının kanıta dayalı denetimi ve fazlara bölünmüş
+> tam kapsamlı geliştirme yol haritası için **[Kapsamlı Geliştirme Rehberi](GELISTIRME-REHBERI.md)**'ne bakın.
+>
+> **Bilinen kritik boşluklar:** Git fonksiyonalitesi yok · frontend derlenmiyor ·
+> `backend/` ve `services/core-service/` çakışıyor · auth kalıcı değil · test yok ·
+> CI yalnızca dizin listeliyor. Detay ve çözüm planı rehberdedir.
 
 ## 🏗️ **Mimari**
 
@@ -73,42 +83,64 @@ cd githubclone
 ```
 
 #### **3. Manuel Kurulum**
+
+> ⚠️ Kök dizinde `package.json` **yoktur** — `npm install` kökte çalışmaz. Bağımlılıklar
+> şu an her paket içinde ayrı yönetilir. Monorepo kurulumu için rehberin
+> [Faz 1](GELISTIRME-REHBERI.md#faz-1--karar-temizlik-ve-monorepo-temeli) bölümüne bakın.
+
 ```bash
-# Bağımlılıkları yükleyin
-npm install
+# Frontend bağımlılıkları
+cd frontend && npm install && cd ..
+
+# Backend bağımlılıkları
+cd backend && npm install && cd ..
 
 # Docker servislerini başlatın
 docker-compose -f docker-compose.unified.yml up -d
-
-# Geliştirme sunucularını başlatın
-npm run dev:vite
 ```
 
 ### **Erişim URL'leri**
-- **Frontend**: http://localhost:3000
-- **Grafana**: http://localhost:3001
-- **Prometheus**: http://localhost:9090
-- **SonarQube**: http://localhost:9000
+
+> ⚠️ Mevcut `docker-compose.unified.yml` dosyasında **port çakışması vardır**
+> (`3001` iki kez bağlanıyor). Aşağıdaki tablo rehberde önerilen düzeltilmiş haritadır —
+> bkz. [Faz 1.3](GELISTIRME-REHBERI.md#13-temizlik).
+
+| Servis | Port |
+|---|---|
+| Frontend (web) | 3000 |
+| API | 4000 |
+| git-server | 4001 |
+| realtime | 4002 |
+| Postgres | 5432 |
+| Redis | 6379 |
+| Prometheus | 9090 |
+| Grafana | 3100 |
+| SonarQube | 9000 |
 
 ## 🛠️ **Geliştirme**
 
 ### **Geliştirme Komutları**
+
+> ⚠️ Bu komutlar **kökte değil, ilgili paket dizininde** çalıştırılır (kök `package.json` yok).
+> Rehberin [Faz 1](GELISTIRME-REHBERI.md#faz-1--karar-temizlik-ve-monorepo-temeli) bölümü
+> bunları tek bir `pnpm` workspace altında toplar.
+
 ```bash
-# Vite development server
-npm run dev:vite
-
-# Next.js development server
-npm run dev:nextjs
-
-# Test çalıştır
+# Frontend (frontend/ dizininde)
+npm run dev          # Vite dev server
+npm run dev:next     # Next.js dev server
+npm run type-check
 npm run test
 
-# Linting
-npm run lint
-
-# Build
-npm run build:prod
+# Backend (backend/ dizininde)
+npm run start:dev
+npm run build
+npm run migration:run
 ```
+
+> ⚠️ `npm run build:vite` şu anda **başarısız olur**: `src/App.tsx`, var olmayan
+> `./pages/*` ve `./components/Layout/*` dosyalarını import ediyor. Çözüm:
+> [Faz 6.1](GELISTIRME-REHBERI.md#61-önce-kırığı-onar).
 
 ### **Mikro Servis Geliştirme**
 ```bash
@@ -172,11 +204,30 @@ docker-compose -f docker-compose.unified.yml up -d
 
 ## 📚 **Dokümantasyon**
 
-- **[Geliştirme Rehberi](MICROSERVICES-DEVELOPMENT-ROADMAP.md)** - Detaylı geliştirme yol haritası
-- **[Komutlar Rehberi](DEVELOPMENT-COMMANDS-GUIDE.md)** - Tüm geliştirme komutları
-- **[Proje Yapısı](PROJECT-STRUCTURE-GUIDE.md)** - Dosya organizasyonu
-- **[Performans Raporu](MICROSERVICES-INDEX-PERFORMANCE-REPORT.md)** - Performans analizi
-- **[Mimari Rehberi](COMPLETE-ARCHITECTURE-GUIDE.md)** - Sistem mimarisi
+### **Ana doküman**
+
+- **[📘 GELISTIRME-REHBERI.md](GELISTIRME-REHBERI.md)** — **Tek yetkili geliştirme rehberi.**
+  Kanıta dayalı kod denetimi, hedef mimari, güncel teknoloji seçimleri (Ağustos 2026) ve
+  kabul kriterleriyle 15 fazlık yol haritası.
+
+### **Geçmiş dokümanlar**
+
+Aşağıdaki dosyalar projenin erken dönemine aittir. Bir kısmı henüz yazılmamış kodun
+performans/doğrulama raporlarıdır ve **doğrulanamaz**; rehberin Faz 1'i bunların
+`docs/archive/` altına taşınmasını önerir.
+
+<details>
+<summary>Listeyi göster</summary>
+
+- [MICROSERVICES-DEVELOPMENT-ROADMAP.md](MICROSERVICES-DEVELOPMENT-ROADMAP.md)
+- [DEVELOPMENT-COMMANDS-GUIDE.md](DEVELOPMENT-COMMANDS-GUIDE.md)
+- [PROJECT-STRUCTURE-GUIDE.md](PROJECT-STRUCTURE-GUIDE.md)
+- [COMPLETE-ARCHITECTURE-GUIDE.md](COMPLETE-ARCHITECTURE-GUIDE.md)
+- [PRODUCTION-DEPLOYMENT-GUIDE.md](PRODUCTION-DEPLOYMENT-GUIDE.md)
+- [PORT-MAPPING-GUIDE.md](PORT-MAPPING-GUIDE.md) / [PORT-CONFLICT-RESOLUTION.md](PORT-CONFLICT-RESOLUTION.md)
+- Performans ve doğrulama raporları (`*-REPORT.md`, `*-ANALYSIS*.md`, `ULTRA-*.md`)
+
+</details>
 
 ## 🧪 **Testing**
 
