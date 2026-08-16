@@ -1,0 +1,151 @@
+# GitHub Clone — geliştirme ortamı
+#
+# Depo kökünden çalıştırın:
+#   docker compose -f infra/compose.yml up -d
+#   docker compose -f infra/compose.yml --profile monitoring up -d
+#
+# Bu dosya, önceki 14 adet docker-compose*.yml dosyasının yerine geçer
+# (eskiler: docs/archive/compose-legacy/). Varyant üretmek yerine `profiles`
+# kullanın — bkz. GELISTIRME-REHBERI.md Faz 15.
+#
+# Port haritası Faz 1.3 ile hizalıdır. Eski düzendeki 3001 çakışması
+# (Vite + auth-service + Grafana aynı portta) giderilmiştir.
+
+name: githubclone
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 20s
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [githubclone]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  # ─── Veri katmanı ──────────────────────────────────────────────────────────
+  postgres:
+    <<: *service-defaults
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-githubclone}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-githubclone}
+      POSTGRES_DB: ${POSTGRES_DB:-githubclone}
+      # Deterministik sıralama ve indeks davranışı için
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports: ["5432:5432"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-githubclone} -d ${POSTGRES_DB:-githubclone}"]
+
+  redis:
+    <<: *service-defaults
+    image: redis:8-alpine
+    ports: ["6379:6379"]
+    volumes: [redis-data:/data]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+
+  # S3 uyumlu nesne depolama: Git LFS, avatar, artifact (Faz 4)
+  minio:
+    <<: *service-defaults
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Konsol
+    volumes: [minio-data:/data]
+    command: ["server", "/data", "--console-address", ":9001"]
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "mc", "ready", "local"]
+
+  # ─── Uygulamalar ───────────────────────────────────────────────────────────
+  api:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      API_PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-githubclone}:${POSTGRES_PASSWORD:-githubclone}@postgres:5432/${POSTGRES_DB:-githubclone}
+      REDIS_URL: redis://redis:6379
+      GIT_STORAGE_PATH: /var/lib/githubclone/repos
+      # Sırlar .env dosyasından gelir; fallback YOK (packages/config/src/env.ts)
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET tanimli olmali - .env.example dosyasina bakin}
+      REFRESH_SECRET: ${REFRESH_SECRET:?REFRESH_SECRET tanimli olmali}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET tanimli olmali}
+    ports: ["4000:4000"]
+    volumes: [git-repos:/var/lib/githubclone/repos]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+
+  web:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_REALTIME_URL: http://localhost:4002
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+    ports: ["3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  # ─── Gözlemlenebilirlik (profil: monitoring) ───────────────────────────────
+  prometheus:
+    <<: *service-defaults
+    profiles: [monitoring]
+    image: prom/prometheus:latest
+    ports: ["9090:9090"]
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+
+  grafana:
+    <<: *service-defaults
+    profiles: [monitoring]
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    # 3001 -> 3100: eski düzende Vite ve auth-service ile çakışıyordu
+    ports: ["3100:3000"]
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../monitoring/grafana:/etc/grafana/provisioning:ro
+    depends_on: [prometheus]
+
+networks:
+  githubclone:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  git-repos:
+  prometheus-data:
+  grafana-data:

@@ -9,19 +9,20 @@
 
 GitHub Clone, modern mikro servis mimarisi kullanarak geliştirilmiş, ölçeklenebilir bir geliştirme platformu olmayı hedefler.
 
-> ### ⚠️ **Önce bunu okuyun: [GELISTIRME-REHBERI.md](GELISTIRME-REHBERI.md)**
+> ### 📘 **Önce bunu okuyun: [GELISTIRME-REHBERI.md](GELISTIRME-REHBERI.md)**
 >
-> Proje şu anda **iskelet aşamasındadır** ve aşağıdaki bölümlerin bir kısmı hedef durumu
-> tarif eder, mevcut durumu değil. Kod tabanının kanıta dayalı denetimi ve fazlara bölünmüş
-> tam kapsamlı geliştirme yol haritası için **[Kapsamlı Geliştirme Rehberi](GELISTIRME-REHBERI.md)**'ne bakın.
+> Kod tabanının kanıta dayalı denetimi ve 15 fazlık geliştirme yol haritası orada.
 >
-> **Bilinen kritik boşluklar:** Git fonksiyonalitesi yok · frontend derlenmiyor ·
-> `backend/` ve `services/core-service/` çakışıyor · auth kalıcı değil · test yok ·
-> CI yalnızca dizin listeliyor. Detay ve çözüm planı rehberdedir.
+> **Faz 1 tamamlandı** ✅ — monorepo temeli kuruldu, frontend ve API artık **gerçekten
+> derleniyor**, CI gerçekten kırılabiliyor.
+>
+> **Kalan kritik boşluklar:** Git fonksiyonalitesi hâlâ yok (Faz 4) ·
+> `services/core-service/` henüz `apps/api`'ye taşınmadı (Faz 5) · auth kalıcı değil (Faz 3) ·
+> ürün testleri yok (Faz 11).
 
 ## 🏗️ **Mimari**
 
-### **Mikro Servisler**
+### **Mikro Servisler** *(eski yapı — ADR-003 ile modüllere taşınıyor)*
 - **Auth Service** (3001) - Kimlik doğrulama ve yetkilendirme
 - **Core Service** (3002) - Ana iş mantığı ve GraphQL API
 - **File Service** (3003) - Dosya yönetimi ve depolama
@@ -35,19 +36,19 @@ GitHub Clone, modern mikro servis mimarisi kullanarak geliştirilmiş, ölçekle
 - **Real-time Service** (3011) - Gerçek zamanlı iletişim
 - **Integration Service** (3012) - Entegrasyon yönetimi
 
-### **Frontend**
-- **Vite + React** - Hızlı geliştirme ortamı
-- **Next.js + React** - Production build
-- **Material-UI** - UI component library
-- **Apollo Client** - GraphQL client
-- **Socket.IO** - Real-time communication
+### **Frontend** (`apps/web`)
+- **Next.js 16** (App Router) — tek framework; Vite kaldırıldı ([ADR-001](docs/adr/0001-frontend-framework.md))
+- **React 19** — Server Components
+- **Material-UI 7** — Faz 6'da Tailwind 4 + shadcn/ui'ye geçilecek
+- **Apollo Client** — Faz 5'te tRPC ile değiştirilecek
+- **Socket.IO** — gerçek zamanlı iletişim
 
-### **Backend**
-- **NestJS** - Mikro servis framework
-- **TypeScript** - Type safety
-- **PostgreSQL** - Ana veritabanı
-- **Redis** - Cache ve session yönetimi
-- **Kafka** - Event-driven architecture
+### **Backend** (`apps/api`)
+- **NestJS 11** — modüler monolit ([ADR-002](docs/adr/0002-backend-baseline.md), [ADR-003](docs/adr/0003-modular-monolith.md))
+- **TypeScript 5.9** — `strict`, `noUncheckedIndexedAccess`
+- **PostgreSQL 18** — ana veritabanı
+- **Redis 8** — önbellek ve oturum
+- **BullMQ** — kuyruk (Kafka yerine; gerekçe ADR-003'te)
 
 ### **DevOps & Monitoring**
 - **Docker** - Containerization
@@ -61,7 +62,8 @@ GitHub Clone, modern mikro servis mimarisi kullanarak geliştirilmiş, ölçekle
 ## 🚀 **Hızlı Başlangıç**
 
 ### **Gereksinimler**
-- Node.js 18+
+- **Node.js 24 LTS** (`.nvmrc` mevcut → `nvm use`)
+- **pnpm 10+** (`corepack enable`)
 - Docker & Docker Compose
 - Git
 
@@ -73,37 +75,23 @@ git clone https://github.com/Real21b/githubclone.git
 cd githubclone
 ```
 
-#### **2. Hızlı Başlangıç (Otomatik)**
+#### **2. Kurulum**
 ```bash
-# Windows PowerShell
-./scripts/quick-start-development.ps1
-
-# Linux/Mac
-./scripts/quick-start-development.sh
+corepack enable          # pnpm'i etkinleştir
+pnpm install             # tüm workspace bağımlılıkları
+cp .env.example .env     # sırları düzenleyin
 ```
 
-#### **3. Manuel Kurulum**
-
-> ⚠️ Kök dizinde `package.json` **yoktur** — `npm install` kökte çalışmaz. Bağımlılıklar
-> şu an her paket içinde ayrı yönetilir. Monorepo kurulumu için rehberin
-> [Faz 1](GELISTIRME-REHBERI.md#faz-1--karar-temizlik-ve-monorepo-temeli) bölümüne bakın.
-
+#### **3. Çalıştırma**
 ```bash
-# Frontend bağımlılıkları
-cd frontend && npm install && cd ..
+docker compose -f infra/compose.yml up -d          # postgres, redis, minio
+pnpm dev                                            # web + api (turbo)
 
-# Backend bağımlılıkları
-cd backend && npm install && cd ..
-
-# Docker servislerini başlatın
-docker-compose -f docker-compose.unified.yml up -d
+# Gözlemlenebilirlik de istiyorsanız:
+docker compose -f infra/compose.yml --profile monitoring up -d
 ```
 
 ### **Erişim URL'leri**
-
-> ⚠️ Mevcut `docker-compose.unified.yml` dosyasında **port çakışması vardır**
-> (`3001` iki kez bağlanıyor). Aşağıdaki tablo rehberde önerilen düzeltilmiş haritadır —
-> bkz. [Faz 1.3](GELISTIRME-REHBERI.md#13-temizlik).
 
 | Servis | Port |
 |---|---|
@@ -121,45 +109,38 @@ docker-compose -f docker-compose.unified.yml up -d
 
 ### **Geliştirme Komutları**
 
-> ⚠️ Bu komutlar **kökte değil, ilgili paket dizininde** çalıştırılır (kök `package.json` yok).
-> Rehberin [Faz 1](GELISTIRME-REHBERI.md#faz-1--karar-temizlik-ve-monorepo-temeli) bölümü
-> bunları tek bir `pnpm` workspace altında toplar.
+Tümü **depo kökünden** çalıştırılır (Turborepo görev grafiğini yönetir):
 
 ```bash
-# Frontend (frontend/ dizininde)
-npm run dev          # Vite dev server
-npm run dev:next     # Next.js dev server
-npm run type-check
-npm run test
+pnpm dev                  # tüm uygulamalar
+pnpm --filter @app/web dev
+pnpm --filter @app/api dev
 
-# Backend (backend/ dizininde)
-npm run start:dev
-npm run build
-npm run migration:run
+pnpm lint                 # Biome (lint + format)
+pnpm lint:fix
+pnpm typecheck            # tüm paketler
+pnpm test
+pnpm build
 ```
 
-> ⚠️ `npm run build:vite` şu anda **başarısız olur**: `src/App.tsx`, var olmayan
-> `./pages/*` ve `./components/Layout/*` dosyalarını import ediyor. Çözüm:
-> [Faz 6.1](GELISTIRME-REHBERI.md#61-önce-kırığı-onar).
+### **Proje yapısı**
 
-### **Mikro Servis Geliştirme**
-```bash
-# Belirli bir servisi başlat
-cd services/auth-service
-npm run start:dev
-
-# Tüm servisleri test et
-./scripts/test-microservices-vite-integration.ps1
+```
+apps/
+  web/       Next.js 16 (App Router)
+  api/       NestJS 11
+packages/
+  config/    Zod ile ortam doğrulaması (@app/config)
+services/    eski mikroservisler — ADR-003 ile taşınıyor
+infra/       compose.yml + compose.prod.yml
+docs/adr/    mimari karar kayıtları
+docs/archive/ eski raporlar
 ```
 
-### **Performance Testing**
-```bash
-# Mikro servis performans testleri
-./scripts/run-microservices-performance-tests.ps1
+### **Mikro Servis Geliştirme** *(eski yapı)*
 
-# Vite vs Next.js karşılaştırma
-./scripts/run-microservices-performance-tests.ps1 -TestType comparison
-```
+`services/*` henüz pnpm workspace'ine dahil değildir ([ADR-003](docs/adr/0003-modular-monolith.md)).
+Taşınana kadar kendi dizinlerinde `npm install` ile çalıştırılırlar.
 
 ## 📊 **Performans**
 
@@ -180,26 +161,28 @@ npm run start:dev
 
 ### **Environment Variables**
 ```bash
-# .env dosyasını oluşturun
 cp .env.example .env
+```
 
-# Gerekli değişkenleri düzenleyin
-NODE_ENV=development
-DATABASE_URL=postgresql://user:password@localhost:5432/githubclone
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=your-secret-key
+Şema ve doğrulama: [`packages/config/src/env.ts`](packages/config/src/env.ts).
+**Fallback sır yoktur** — `JWT_SECRET` eksik veya 32 karakterden kısaysa uygulama açılmaz:
+
+```bash
+openssl rand -base64 48   # her sır için ayrı üretin
 ```
 
 ### **Docker Compose**
+14 ayrı compose dosyası **2**'ye indirildi; varyant yerine profil kullanılır.
+
 ```bash
-# Development
-docker-compose -f docker-compose.development.yml up -d
+# Geliştirme
+docker compose -f infra/compose.yml up -d
 
-# Production
-docker-compose -f docker-compose.production.yml up -d
+# Geliştirme + monitoring
+docker compose -f infra/compose.yml --profile monitoring up -d
 
-# Unified (Tüm servisler)
-docker-compose -f docker-compose.unified.yml up -d
+# Üretim (overlay)
+docker compose -f infra/compose.yml -f infra/compose.prod.yml up -d
 ```
 
 ## 📚 **Dokümantasyon**
@@ -213,18 +196,18 @@ docker-compose -f docker-compose.unified.yml up -d
 ### **Geçmiş dokümanlar**
 
 Aşağıdaki dosyalar projenin erken dönemine aittir. Bir kısmı henüz yazılmamış kodun
-performans/doğrulama raporlarıdır ve **doğrulanamaz**; rehberin Faz 1'i bunların
-`docs/archive/` altına taşınmasını önerir.
+performans/doğrulama raporlarıdır ve **doğrulanamaz**; Faz 1'de `docs/archive/`
+altına taşındılar ve **bakım görmezler**.
 
 <details>
 <summary>Listeyi göster</summary>
 
-- [MICROSERVICES-DEVELOPMENT-ROADMAP.md](MICROSERVICES-DEVELOPMENT-ROADMAP.md)
-- [DEVELOPMENT-COMMANDS-GUIDE.md](DEVELOPMENT-COMMANDS-GUIDE.md)
-- [PROJECT-STRUCTURE-GUIDE.md](PROJECT-STRUCTURE-GUIDE.md)
-- [COMPLETE-ARCHITECTURE-GUIDE.md](COMPLETE-ARCHITECTURE-GUIDE.md)
-- [PRODUCTION-DEPLOYMENT-GUIDE.md](PRODUCTION-DEPLOYMENT-GUIDE.md)
-- [PORT-MAPPING-GUIDE.md](PORT-MAPPING-GUIDE.md) / [PORT-CONFLICT-RESOLUTION.md](PORT-CONFLICT-RESOLUTION.md)
+- [MICROSERVICES-DEVELOPMENT-ROADMAP.md](docs/archive/MICROSERVICES-DEVELOPMENT-ROADMAP.md)
+- [DEVELOPMENT-COMMANDS-GUIDE.md](docs/archive/DEVELOPMENT-COMMANDS-GUIDE.md)
+- [PROJECT-STRUCTURE-GUIDE.md](docs/archive/PROJECT-STRUCTURE-GUIDE.md)
+- [COMPLETE-ARCHITECTURE-GUIDE.md](docs/archive/COMPLETE-ARCHITECTURE-GUIDE.md)
+- [PRODUCTION-DEPLOYMENT-GUIDE.md](docs/archive/PRODUCTION-DEPLOYMENT-GUIDE.md)
+- [PORT-MAPPING-GUIDE.md](docs/archive/PORT-MAPPING-GUIDE.md) / [PORT-CONFLICT-RESOLUTION.md](docs/archive/PORT-CONFLICT-RESOLUTION.md)
 - Performans ve doğrulama raporları (`*-REPORT.md`, `*-ANALYSIS*.md`, `ULTRA-*.md`)
 
 </details>

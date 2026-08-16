@@ -1,0 +1,106 @@
+# GitHub Clone — üretim üst katmanı (overlay)
+#
+# compose.yml ile birlikte kullanılır:
+#   docker compose -f infra/compose.yml -f infra/compose.prod.yml up -d
+#
+# Bu dosya yalnızca üretimde DEĞİŞEN alanları taşır; servis tanımlarını
+# tekrarlamaz. Böylece geliştirme ve üretim arasındaki fark tek bakışta okunur.
+
+name: githubclone
+
+services:
+  postgres:
+    # Üretimde veritabanı portu dışarı açılmaz — yalnızca ağ içinden erişilir
+    ports: !override []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?uretimde zorunlu}
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 4G }
+        reservations: { cpus: "1", memory: 2G }
+
+  redis:
+    ports: !override []
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 1gb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --requirepass
+      - ${REDIS_PASSWORD:?uretimde zorunlu}
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1536M }
+
+  minio:
+    ports: !override []
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 2G }
+
+  api:
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    ports: !override []          # trafiği yalnızca nginx karşılar
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    deploy:
+      replicas: 3
+      resources:
+        limits: { cpus: "2", memory: 2G }
+      update_config:
+        order: start-first       # sıfır kesintili dağıtım
+        failure_action: rollback
+        delay: 10s
+
+  web:
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:?uretimde zorunlu}
+      NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL:?uretimde zorunlu}
+    ports: !override []
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    deploy:
+      replicas: 2
+      resources:
+        limits: { cpus: "1", memory: 1G }
+      update_config:
+        order: start-first
+        failure_action: rollback
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    networks: [githubclone]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../nginx:/etc/nginx/conf.d:ro
+      - nginx-certs:/etc/letsencrypt:ro
+    depends_on: [api, web]
+    security_opt: [no-new-privileges:true]
+
+  # Üretimde gözlemlenebilirlik profil değil, varsayılan
+  prometheus:
+    profiles: !override []
+    ports: !override []
+
+  grafana:
+    profiles: !override []
+    ports: !override []
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?uretimde zorunlu}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-https://grafana.githubclone.com}
+
+volumes:
+  nginx-certs:

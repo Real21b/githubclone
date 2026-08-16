@@ -173,3 +173,11 @@ k6-results/
 # Performance monitoring
 monitoring/prometheus/data/
 monitoring/grafana/data/
+# --- Monorepo (Faz 1) ---
+.turbo/
+.data/
+*.tsbuildinfo
+next-env.d.ts
+
+# pnpm store (lockfile COMMIT EDILIR - tekrarlanabilir build icin zorunlu)
+.pnpm-store/

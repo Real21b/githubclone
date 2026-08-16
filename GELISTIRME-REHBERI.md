@@ -460,15 +460,46 @@ jobs:
 Ek olarak: `dependency-review`, `codeql`, Trivy (mevcut, korunur), ve
 **branch protection** — CI yeşil olmadan `main`'e merge yok.
 
-### ✅ Faz 1 Kabul Kriterleri
+### ✅ Faz 1 Kabul Kriterleri — **TAMAMLANDI**
 
-- [ ] `pnpm install && pnpm turbo build` kökte **sıfır hata** ile tamamlanır
-- [ ] `pnpm turbo typecheck` sıfır hata
-- [ ] Tüm workspace'lerde `pnpm-lock.yaml` tek ve güncel
-- [ ] `docker compose -f infra/compose.yml up -d` port çakışması olmadan ayağa kalkar
-- [ ] CI, kasten bozulan bir tip hatasında **kırmızı** olur (doğrulayın!)
-- [ ] 3 ADR yazılmış ve merge edilmiş
-- [ ] Kök dizinde ≤ 5 markdown dosyası kalmış
+- [x] `pnpm install && pnpm turbo build` kökte **sıfır hata** ile tamamlanır → `8 successful, 8 total`
+- [x] `pnpm turbo typecheck` sıfır hata
+- [x] Tüm workspace'lerde `pnpm-lock.yaml` tek ve güncel (eski `frontend/package-lock.json` kaldırıldı)
+- [x] `docker compose config` port çakışması olmadan doğrulanır (dev + prod)
+- [x] CI, kasten bozulan bir tip hatasında **kırmızı** olur — doğrulandı:
+  - tip hatası enjekte edildi → `@app/config#typecheck` FAILED
+  - kullanılmayan değişken eklendi → `biome ci` exit=1
+  - test beklentisi bozuldu → `1 failed | 12 passed`
+  - üçü de geri alındıktan sonra → `8 successful, 8 total`, `biome exit=0`
+- [x] 3 ADR yazıldı → [`docs/adr/`](docs/adr/)
+- [x] Kök dizinde 2 markdown kaldı (27 rapor `docs/archive/`'e taşındı)
+- [x] 14 compose dosyası → 2 (`infra/compose.yml`, `infra/compose.prod.yml`)
+
+### 📋 Faz 1'de bulunan ve düzeltilen gerçek hatalar
+
+Denetimde öngörülmeyen, **yalnızca gerçekten derleyince ortaya çıkan** sorunlar:
+
+| # | Sorun | Nerede | Etki |
+|---|---|---|---|
+| 1 | `'use client'` direktifi eksik | `AuthContext`, `SocketContext`, `UnifiedIndex`, `theme` | Next tarafı da hiç derlenmemiş |
+| 2 | MUI sağlayıcıları Server Component içinde | `app/layout.tsx` | Build hatası |
+| 3 | `QueryClientProvider` hiç yok | — | TanStack Query çağrıları runtime'da patlardı |
+| 4 | TypeORM `new Index(...)` | 2 migration | `Index` bir **dekoratör**, sınıf değil → migration'lar hiç çalıştırılmamış |
+| 5 | `createForeignKey` düz nesne alıyor | `InitialMigration` | Aynı sebep |
+| 6 | `@nestjs/config` kullanılıyor, bağımlılık değil | `app.module`, `cache.service` | Derleme hatası |
+| 7 | `retryDelayOnFailover` diye bir ioredis seçeneği yok | `cache.service` | Sessizce yok sayılıyordu |
+| 8 | **İkinci fallback secret**: `JWT_SECRET \|\| 'your-secret-key'` | `jwt.strategy.ts` | Denetimde kaçırılmıştı |
+| 9 | MUI v7 `Grid` API değişikliği (`item` → `size`) | `UnifiedIndex` | 12 kullanım |
+| 10 | TanStack Query v4 API'si (`cacheTime`, `getNextPageParam`) | `useOptimizedDataFetching` | Ölü kod, kaldırıldı |
+| 11 | `Error` ikonu global `Error` tipini gölgeliyor | `UnifiedIndex` | — |
+| 12 | Biome otofix'i NestJS DI'yı bozdu (`import type`) | `apps/api` geneli | Aşağıya bakın |
+
+> **Not — `useImportType` neden `apps/api` için kapalı:** NestJS bağımlılık enjeksiyonu ve
+> GraphQL tip kaydı `emitDecoratorMetadata`'ya dayanır. Bir sınıf `import type` ile alınırsa
+> dekoratör meta verisi `Object` olarak yayılır; **derleme geçer, uygulama çalışma zamanında
+> sessizce bozulur**. `biome.json` içindeki `overrides` bloğu bu yüzden vardır.
+> Aynı gerekçeyle `noUnusedFunctionParameters` de kapalıdır: `@Args('id') id: string`
+> gibi dekoratörlü parametreler yanlış pozitif üretir.
 
 ---
 
@@ -1381,7 +1412,7 @@ merge → main
 
 | Faz | Konu | Süre | Öncelik |
 |---|---|---|---|
-| 1 | Temizlik + monorepo | 3–5 gün | P0 |
+| 1 | Temizlik + monorepo | ~~3–5 gün~~ **✅ tamamlandı** | P0 |
 | 2 | Veri modeli | 4–6 gün | P0 |
 | 3 | Auth + yetkilendirme | 5–7 gün | P0 |
 | 4 | **Git motoru** | 3–4 hafta | P0 |
