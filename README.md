@@ -1,9 +1,9 @@
 # 🚀 GitHub Clone - Modern Microservices Platform
 
 [![CI/CD](https://github.com/Real21b/githubclone/actions/workflows/ci.yml/badge.svg)](https://github.com/Real21b/githubclone/actions/workflows/ci.yml)
-[![Code Quality](https://sonarcloud.io/api/project_badges/measure?project=githubclone&metric=alert_status)](https://sonarcloud.io/dashboard?id=githubclone)
-[![Performance](https://img.shields.io/badge/performance-optimized-green.svg)](https://github.com/yourusername/githubclone)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Sayfa: https://real21b.github.io/githubclone/
 
 ## 📋 **Proje Hakkında**
 
